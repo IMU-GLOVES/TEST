@@ -28,9 +28,9 @@ bool initIMU(Adafruit_MPU6050 &imu, int channel, const char *name) {
     return false;
   }
 
-  imu.setAccelerometerRange(MPU6050_RANGE_8_G);
-  imu.setGyroRange(MPU6050_RANGE_500_DEG);
-  imu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+  imu.setAccelerometerRange(MPU6050_RANGE_2_G);
+  imu.setGyroRange(MPU6050_RANGE_250_DEG);
+  imu.setFilterBandwidth(MPU6050_BAND_94_HZ);  //94
 
   Serial.printf("✔ %s 初始化完成（通道 %d）\n", name, channel);
   return true;
@@ -93,5 +93,5 @@ void loop() {
     imu1_data[0], imu1_data[1], imu1_data[2], imu1_data[3], imu1_data[4], imu1_data[5]
   );
 
-  delay(10);  // 100 Hz
+  delay(10);  // 100 Hz //5
 }
