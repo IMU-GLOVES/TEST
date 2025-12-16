@@ -88,9 +88,9 @@ void loop() {
   // 輸出 18 個原始數值給 Python
   Serial.printf(
     "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,   %.4f,%.4f,%.4f,%.4f,%.4f,%.4f,   %.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
-    imu1_data[0], imu1_data[1], imu1_data[2], imu1_data[3], imu1_data[4], imu1_data[5],
+    imu3_data[0], imu3_data[1], imu3_data[2], imu3_data[3], imu3_data[4], imu3_data[5],
     imu2_data[0], imu2_data[1], imu2_data[2], imu2_data[3], imu2_data[4], imu2_data[5],
-    imu3_data[0], imu3_data[1], imu3_data[2], imu3_data[3], imu3_data[4], imu3_data[5]
+    imu1_data[0], imu1_data[1], imu1_data[2], imu1_data[3], imu1_data[4], imu1_data[5]
   );
 
   delay(10);  // 100 Hz
