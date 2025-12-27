@@ -124,18 +124,18 @@ class HandSegment:
         model_Z = self.visual_bone.axis.norm()   # 前方 (骨頭指向)
         model_X = cross(model_Z, model_Y).norm() # 側方 (右方)
 
-        # C. 套用旋轉 (Euler Angles)
-        # Yaw (-y) -> 繞 Z 軸 (左右揮/扭動)
-        if self.allow_yaw:  # <--- [新增] 如果允許才轉
-            self.visual_bone.rotate(angle=radians(-y), axis=model_Z)
-        
-        # Pitch (p) -> 繞 Y 軸 (自轉/手指張開)
-        if self.allow_pitch: # <--- [新增]
-            self.visual_bone.rotate(angle=radians(p), axis=model_Y)
-        
-        # Roll (r) -> 繞 X 軸 (彎曲/點頭) -> 手指最主要的動作
-        if self.allow_roll: # <--- [新增]
-            self.visual_bone.rotate(angle=radians(r), axis=model_X)
+        # C. 分流對接邏輯 (根據部件類型決定旋轉軸)
+        if self.is_palm:
+            # 掌心的邏輯
+            if self.allow_yaw:   self.visual_bone.rotate(angle=radians(-y), axis=model_Z)
+            if self.allow_pitch: self.visual_bone.rotate(angle=radians(p),  axis=model_Y) # 繞上軸擺動
+            if self.allow_roll:  self.visual_bone.rotate(angle=radians(r),  axis=model_X)
+        else:
+            # 指節的邏輯 (對接方式與掌心不同)
+            # 我們把 IMU 的 Pitch (p) 改為驅動指節的 model_Z (因為指節的 Z 朝上)
+            if self.allow_yaw:   self.visual_bone.rotate(angle=radians(-y), axis=model_Y) 
+            if self.allow_pitch: self.visual_bone.rotate(angle=radians(p),  axis=model_Z) # 繞生長軸擺動
+            if self.allow_roll:  self.visual_bone.rotate(angle=radians(r),  axis=model_X)
 
 
 # ==========================================
@@ -144,7 +144,7 @@ class HandSegment:
 
 # 1. 硬體設定
 # 根據你的描述：[Ch0(指根), Ch1(指中), Ch2(指尖), Ch7(掌心)]
-my_setup = [6] * 6 + [9] 
+my_setup = [6] * 8 + [9] 
 manager = SerialManager(imu_setup=my_setup)
 processor = DataProcessor()
 
@@ -160,13 +160,15 @@ scene = canvas(
     title='Full Index Finger Visualizer',
     width=1000, height=800,
     background=color.black,
-    center=vector(0, 5, 0.5) # 把鏡頭中心稍微往右移，因為手指會往右長
+    # center=vector(-4, 5, 0.5) # 把鏡頭中心稍微往右移，因為手指會往右長
 )
+scene.camera.pos = vector(-8, 5, 3)
+scene.forward = vector(3, -1.5, -1)
 distant_light(direction=vector(1, 1, 1), color=color.white)
 
 # 3. 定義初始向量
 # 掌心：稍微傾斜 (你的原始設定)
-palm_init_axis = vector(-1, 0, 1).norm()
+palm_init_axis = vector(-1, 0, 0).norm()
 palm_init_up = vector(0, 1, 0)
 
 # 手指：預設跟掌心同方向，或者你可以設為 vector(1,0,0) 讓它直直向右
@@ -184,62 +186,96 @@ finger_init_up = vector(1, 0, 0)
 #   4. 建立手部物件 (The Hand Construction)
 # ==========================================
 
-# [索引 3] 掌心 (Palm) - 連接 Ch7
+# [索引 8] 掌心 (Palm) - 連接 Mux2 Ch7
 # 1. 掌心 (Palm)
 # 它是老大，parent=None
 palm = HandSegment(
     name="Palm", 
     parent=None, 
-    length=0.5, radius=4, gap=0, imu_index=6, # 假設最後一顆是掌心
-    initial_axis=vector(-1,0,1).norm(), 
-    initial_up=vector(0,1,0), 
+    length=0.5, radius=4, gap=0, imu_index=-1, # 假設最後一顆是掌心
+    initial_axis=palm_init_axis, 
+    initial_up=palm_init_up, 
     is_palm=True,
-    # allow_roll=False,
-    # allow_pitch=False,
+    allow_roll=False,
+    allow_pitch=False,
     allow_yaw=False    # 禁止揮手 (Z軸鎖定)
 )
 
 # -----------------------------------------------------------
-# [食指] (Index / Index2)
+# [拇指] (Index / Index1)
 # -----------------------------------------------------------
-# [索引 2] 食指指根 - 連接 Ch2
-index2_base = HandSegment(
-    name="Index2_Base", 
+# [索引 1] 拇指指根 - 連接 Mux1 Ch1
+index1_base = HandSegment(
+    name="Index1_Base", 
     parent=palm,          # 變數名稱
-    length=2, radius=0.8, 
+    length=2, radius=0.6, 
     gap=0.5, 
-    imu_index=2,
+    imu_index=1,
     # 確保這裡是寫 finger_init_axis，而不是 palm_init_axis
     initial_axis=finger_init_axis, 
     
     # 這裡也要確保是用新的 finger_init_up
     initial_up=finger_init_up,
     # Offset: 食指在掌心右側，所以 X 設為 2 (數值請依畫面調整)
-    pos_offset=vector(-3, 3, 0),
-    allow_yaw=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
+    pos_offset=vector(-4, 0, 0),
+    allow_pitch=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
                        # 因為指節跟手掌建立模型的邏輯問題所以指節自轉是yaw
 )
 
-# [索引 1] 食指指中 - 連接 Ch1
-index2_mid = HandSegment(
-    name="Index2_Mid", 
-    parent=index2_base,   # 接在 index2_base 後面
-    length=2, radius=0.7, 
+# [索引 0] 拇指指尖 - 連接 Mux1 Ch0
+index1_top = HandSegment(
+    name="Index1_Top", 
+    parent=index1_base,   # 接在 index1_base 後面
+    length=2, radius=0.5, 
     gap=0.3, 
-    imu_index=1,
+    imu_index=0,
     initial_axis=finger_init_axis, initial_up=finger_init_up,
     pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
     allow_yaw=False,    # 鎖
     allow_pitch=False  # 鎖 (指中關節是樞紐關節，不能左右張開)
 )
 
-# [索引 0] 食指指尖 - 連接 Ch0
+# -----------------------------------------------------------
+# [食指] (Index / Index2)
+# -----------------------------------------------------------
+# [索引 4] 食指指根 - 連接 Mux1 Ch4
+index2_base = HandSegment(
+    name="Index2_Base", 
+    parent=palm,          # 變數名稱
+    length=2, radius=0.6, 
+    gap=0.5, 
+    imu_index=4,
+    # 確保這裡是寫 finger_init_axis，而不是 palm_init_axis
+    initial_axis=finger_init_axis, 
+    
+    # 這裡也要確保是用新的 finger_init_up
+    initial_up=finger_init_up,
+    # Offset: 食指在掌心右側，所以 X 設為 2 (數值請依畫面調整)
+    pos_offset=vector(-1.5, 3.7, 0),
+    allow_pitch=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
+                       # 因為指節跟手掌建立模型的邏輯問題所以指節自轉是yaw
+)
+
+# [索引 3] 食指指中 - 連接 Mux1 Ch3
+index2_mid = HandSegment(
+    name="Index2_Mid", 
+    parent=index2_base,   # 接在 index2_base 後面
+    length=2, radius=0.5, 
+    gap=0.3, 
+    imu_index=3,
+    initial_axis=finger_init_axis, initial_up=finger_init_up,
+    pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
+    allow_yaw=False,    # 鎖
+    allow_pitch=False  # 鎖 (指中關節是樞紐關節，不能左右張開)
+)
+
+# [索引 2] 食指指尖 - 連接 Mux1 Ch2
 index2_top = HandSegment(
     name="Index2_Top", 
     parent=index2_mid,   # 接在 index2_mid 後面
-    length=2, radius=0.7, 
+    length=2, radius=0.5, 
     gap=0.3, 
-    imu_index=0,
+    imu_index=2,
     initial_axis=finger_init_axis, initial_up=finger_init_up,
     pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
     allow_yaw=False,    # 鎖
@@ -249,13 +285,13 @@ index2_top = HandSegment(
 # -----------------------------------------------------------
 # [中指] (Index / Index3)
 # -----------------------------------------------------------
-# [索引 5] 食指指根 - 連接 Ch5
+# [索引 7] 食指指根 - 連接 Ch7
 index3_base = HandSegment(
     name="Index3_Base", 
     parent=palm,          # 變數名稱
-    length=2, radius=0.8, 
+    length=2, radius=0.6, 
     gap=0.5, 
-    imu_index=5,
+    imu_index=7,
     # 確保這裡是寫 finger_init_axis，而不是 palm_init_axis
     initial_axis=finger_init_axis, 
     
@@ -263,29 +299,29 @@ index3_base = HandSegment(
     initial_up=finger_init_up,
     # Offset: 食指在掌心右側，所以 X 設為 2 (數值請依畫面調整)
     pos_offset=vector(0, 4, 0),
-    allow_yaw=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
+    allow_pitch=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
 )
 
-# [索引 4] 食指指中 - 連接 Ch4
+# [索引 6] 食指指中 - 連接 Ch6
 index3_mid = HandSegment(
     name="Index3_Mid", 
     parent=index3_base,   # 接在 index3_base 後面
-    length=2, radius=0.7, 
+    length=2, radius=0.5, 
     gap=0.3, 
-    imu_index=4,
+    imu_index=6,
     initial_axis=finger_init_axis, initial_up=finger_init_up,
     pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
     allow_yaw=False,    # 鎖
     allow_pitch=False  # 鎖 (指中關節是樞紐關節，不能左右張開)
 )
 
-# [索引 3] 食指指尖 - 連接 Ch3
+# [索引 5] 食指指尖 - 連接 Ch5
 index3_top = HandSegment(
-    name="Index2_Top", 
+    name="Index3_Top", 
     parent=index3_mid,   # 接在 index3_mid 後面
-    length=2, radius=0.7, 
+    length=2, radius=0.5, 
     gap=0.3, 
-    imu_index=3,
+    imu_index=5,
     initial_axis=finger_init_axis, initial_up=finger_init_up,
     pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
     allow_yaw=False,    # 鎖
@@ -294,7 +330,9 @@ index3_top = HandSegment(
 
 # 放入清單，順序其實不影響邏輯，因為 update 裡面是看 parent 計算
 # 但為了保險起見，我們還是按層級順序放
-hand_parts = [palm, index2_base, index2_mid, index2_top, index3_base, index3_mid, index3_top]
+hand_parts = [palm, index1_base, index1_top,
+               index2_base, index2_mid, index2_top,
+                index3_base, index3_mid, index3_top]
 
 # ==========================================
 #   5. 主迴圈
