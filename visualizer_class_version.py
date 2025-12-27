@@ -144,7 +144,7 @@ class HandSegment:
 
 # 1. 硬體設定
 # 根據你的描述：[Ch0(指根), Ch1(指中), Ch2(指尖), Ch7(掌心)]
-my_setup = [6] * 3 + [9] 
+my_setup = [6] * 6 + [9] 
 manager = SerialManager(imu_setup=my_setup)
 processor = DataProcessor()
 
@@ -190,10 +190,12 @@ finger_init_up = vector(1, 0, 0)
 palm = HandSegment(
     name="Palm", 
     parent=None, 
-    length=0.5, radius=4, gap=0, imu_index=3, # 假設最後一顆是掌心
+    length=0.5, radius=4, gap=0, imu_index=6, # 假設最後一顆是掌心
     initial_axis=vector(-1,0,1).norm(), 
     initial_up=vector(0,1,0), 
     is_palm=True,
+    # allow_roll=False,
+    # allow_pitch=False,
     allow_yaw=False    # 禁止揮手 (Z軸鎖定)
 )
 
@@ -214,7 +216,8 @@ index2_base = HandSegment(
     initial_up=finger_init_up,
     # Offset: 食指在掌心右側，所以 X 設為 2 (數值請依畫面調整)
     pos_offset=vector(-3, 3, 0),
-    allow_pitch=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
+    allow_yaw=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
+                       # 因為指節跟手掌建立模型的邏輯問題所以指節自轉是yaw
 )
 
 # [索引 1] 食指指中 - 連接 Ch1
@@ -243,10 +246,55 @@ index2_top = HandSegment(
     allow_pitch=False  # 鎖
 )
 
+# -----------------------------------------------------------
+# [中指] (Index / Index3)
+# -----------------------------------------------------------
+# [索引 5] 食指指根 - 連接 Ch5
+index3_base = HandSegment(
+    name="Index3_Base", 
+    parent=palm,          # 變數名稱
+    length=2, radius=0.8, 
+    gap=0.5, 
+    imu_index=5,
+    # 確保這裡是寫 finger_init_axis，而不是 palm_init_axis
+    initial_axis=finger_init_axis, 
+    
+    # 這裡也要確保是用新的 finger_init_up
+    initial_up=finger_init_up,
+    # Offset: 食指在掌心右側，所以 X 設為 2 (數值請依畫面調整)
+    pos_offset=vector(0, 4, 0),
+    allow_yaw=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
+)
+
+# [索引 4] 食指指中 - 連接 Ch4
+index3_mid = HandSegment(
+    name="Index3_Mid", 
+    parent=index3_base,   # 接在 index3_base 後面
+    length=2, radius=0.7, 
+    gap=0.3, 
+    imu_index=4,
+    initial_axis=finger_init_axis, initial_up=finger_init_up,
+    pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
+    allow_yaw=False,    # 鎖
+    allow_pitch=False  # 鎖 (指中關節是樞紐關節，不能左右張開)
+)
+
+# [索引 3] 食指指尖 - 連接 Ch3
+index3_top = HandSegment(
+    name="Index2_Top", 
+    parent=index3_mid,   # 接在 index3_mid 後面
+    length=2, radius=0.7, 
+    gap=0.3, 
+    imu_index=3,
+    initial_axis=finger_init_axis, initial_up=finger_init_up,
+    pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
+    allow_yaw=False,    # 鎖
+    allow_pitch=False  # 鎖
+)
+
 # 放入清單，順序其實不影響邏輯，因為 update 裡面是看 parent 計算
 # 但為了保險起見，我們還是按層級順序放
-#hand_parts = [palm, index_base, index_mid, index_tip]
-hand_parts = [palm, index2_base, index2_mid, index2_top]
+hand_parts = [palm, index2_base, index2_mid, index2_top, index3_base, index3_mid, index3_top]
 
 # ==========================================
 #   5. 主迴圈
