@@ -26,7 +26,7 @@
 
 ---parent要改成這個指節跟隨的物件，每個指根指節(base)的parent都是手掌(palm)，每個指中指節(mid)的parent都是指根指節(base)，每個指尖指節(top)的parent都是指中指節(mid)。以中指指中指節(index3\_mid)為例，他的parent是中指指根指節(index3\_base)
 
----imu\_index，這個要根據imu在的channel改，現在只有一個多工器所以就是看多工器上的數字，SD/SC0就是0，SD/SC1就是1
+---imu\_index，這個要根據資料從imu9_serial_manager出來的排序，指節如果是連接第一個多工器的channel 0~7的index就是0~7，如果是連接第二個多工器的channel 就是8~13(總共只會用到14個六軸所以是0~13，掌心我已經設定一定是最後一個了，現在也接在第二個多工器的channel 7了)
 
 ---可以的話把註解也都完整複製跟修改，比較清楚這是哪根手指頭的code，註解的\[索引]、ch\*也要記得改
 ---最後記得要把新增的指節變數加入到hand_parts這個list
