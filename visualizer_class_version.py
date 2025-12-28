@@ -9,7 +9,7 @@ import sys
 class HandSegment:
     def __init__(self, name, parent, length, radius, gap,
                   imu_index, initial_axis, initial_up,
-                    is_palm=False, pos_offset=vector(0,0,0),
+                    is_palm=False, is_thumb=False,pos_offset=vector(0,0,0),
                  allow_pitch=True, allow_roll=True, allow_yaw=True):
         """
         :param name: 組件名稱
@@ -21,6 +21,7 @@ class HandSegment:
         :param initial_axis: 初始指向向量
         :param initial_up: 初始上方向量
         :param is_palm: 是否為掌心 (決定是否隱藏關節球)
+        :param is_palm: 是否為掌心 (把拇指的移動邏輯單獨拉出來)
         """
         self.name = name
         self.parent = parent
@@ -37,6 +38,7 @@ class HandSegment:
         self.initial_axis = initial_axis.norm()
         self.initial_up = initial_up.norm()
         self.is_palm = is_palm
+        self.is_thumb = is_thumb
 
         # --- 建立視覺物件 ---
         # 1. 關節球 (Joint Sphere) - 作為旋轉軸心的視覺裝飾
@@ -131,11 +133,17 @@ class HandSegment:
             if self.allow_pitch: self.visual_bone.rotate(angle=radians(p),  axis=model_Y) # 繞上軸擺動
             if self.allow_roll:  self.visual_bone.rotate(angle=radians(r),  axis=model_X)
         else:
-            # 指節的邏輯 (對接方式與掌心不同)
-            # 我們把 IMU 的 Pitch (p) 改為驅動指節的 model_Z (因為指節的 Z 朝上)
-            if self.allow_yaw:   self.visual_bone.rotate(angle=radians(-y), axis=model_Y) 
-            if self.allow_pitch: self.visual_bone.rotate(angle=radians(p),  axis=model_Z) # 繞生長軸擺動
-            if self.allow_roll:  self.visual_bone.rotate(angle=radians(r),  axis=model_X)
+            if self.is_thumb:
+                #把拇指的移動修正
+                if self.allow_yaw:   self.visual_bone.rotate(angle=radians(y), axis=model_X) 
+                if self.allow_pitch: self.visual_bone.rotate(angle=radians(p),  axis=model_Z) # 繞生長軸擺動
+                if self.allow_roll:  self.visual_bone.rotate(angle=radians(r),  axis=model_Y)
+            else:
+                # 指節的邏輯 (對接方式與掌心不同)
+                # 我們把 IMU 的 Pitch (p) 改為驅動指節的 model_Z (因為指節的 Z 朝上)
+                if self.allow_yaw:   self.visual_bone.rotate(angle=radians(-y), axis=model_Y) 
+                if self.allow_pitch: self.visual_bone.rotate(angle=radians(p),  axis=model_Z) # 繞生長軸擺動
+                if self.allow_roll:  self.visual_bone.rotate(angle=radians(r),  axis=model_X)
 
 
 # ==========================================
@@ -210,16 +218,15 @@ index1_base = HandSegment(
     parent=palm,          # 變數名稱
     length=2, radius=0.6, 
     gap=0.5, 
-    imu_index=1,
+    imu_index=1, 
+    is_thumb=True,
     # 確保這裡是寫 finger_init_axis，而不是 palm_init_axis
-    initial_axis=finger_init_axis, 
-    
+    initial_axis=finger_init_axis,
     # 這裡也要確保是用新的 finger_init_up
     initial_up=finger_init_up,
     # Offset: 食指在掌心右側，所以 X 設為 2 (數值請依畫面調整)
     pos_offset=vector(-4, 0, 0),
     allow_pitch=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
-                       # 因為指節跟手掌建立模型的邏輯問題所以指節自轉是yaw
 )
 
 # [索引 0] 拇指指尖 - 連接 Mux1 Ch0
@@ -228,7 +235,8 @@ index1_top = HandSegment(
     parent=index1_base,   # 接在 index1_base 後面
     length=2, radius=0.5, 
     gap=0.3, 
-    imu_index=0,
+    imu_index=0, 
+    is_thumb=True,
     initial_axis=finger_init_axis, initial_up=finger_init_up,
     pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
     allow_yaw=False,    # 鎖
@@ -253,7 +261,6 @@ index2_base = HandSegment(
     # Offset: 食指在掌心右側，所以 X 設為 2 (數值請依畫面調整)
     pos_offset=vector(-1.5, 3.7, 0),
     allow_pitch=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
-                       # 因為指節跟手掌建立模型的邏輯問題所以指節自轉是yaw
 )
 
 # [索引 3] 食指指中 - 連接 Mux1 Ch3
