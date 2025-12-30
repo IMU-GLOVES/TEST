@@ -28,7 +28,7 @@ class HandSegment:
         self.length = length
         self.gap = gap
         self.imu_index = imu_index
-        self.pos_offset = pos_offset  # <--- [新增] 把偏移量存起來
+        self.pos_offset = pos_offset  # [新增] 把偏移量存起來
         # [新增] 把開關存起來
         self.allow_pitch = allow_pitch # 是否允許自轉/外展 (Y軸)
         self.allow_roll = allow_roll   # 是否允許彎曲/點頭 (X軸)
@@ -43,7 +43,7 @@ class HandSegment:
         # --- 建立視覺物件 ---
         # 1. 關節球 (Joint Sphere) - 作為旋轉軸心的視覺裝飾
         #    它的位置就是這個物件的 pos (原點)
-        sphere_radius = radius # 讓關節跟骨頭一樣粗，或者稍微大一點 (radius * 1.1)
+        sphere_radius = radius # 讓關節跟骨頭一樣粗，或者稍微大一點
         if is_palm:
             sphere_radius = 0 # 掌心通常隱藏關節球
             
@@ -84,7 +84,7 @@ class HandSegment:
             # A. 如果我是掌心 (Root)，位置固定在畫面中心
             current_start_pos = vector(0, 0, 0)
         else:
-            # --- [新增/修改] 智慧型跟隨演算法 ---
+            # --- 智慧型跟隨演算法 ---
             
             # 1. 取得父親的三軸 (因為偏移是要相對於父親的身體)
             parent_bone = self.parent.visual_bone
@@ -151,7 +151,6 @@ class HandSegment:
 # ==========================================
 
 # 1. 硬體設定
-# 根據你的描述：[Ch0(指根), Ch1(指中), Ch2(指尖), Ch7(掌心)]
 my_setup = [6] * 8 + [9] 
 manager = SerialManager(imu_setup=my_setup)
 processor = DataProcessor()
@@ -175,26 +174,20 @@ scene.forward = vector(3, -1.5, -1)
 distant_light(direction=vector(1, 1, 1), color=color.white)
 
 # 3. 定義初始向量
-# 掌心：稍微傾斜 (你的原始設定)
+# 掌心
 palm_init_axis = vector(-1, 0, 0).norm()
 palm_init_up = vector(0, 1, 0)
 
-# 手指：預設跟掌心同方向，或者你可以設為 vector(1,0,0) 讓它直直向右
-# finger_init_axis = palm_init_axis 
-# finger_init_up = palm_init_up
-# --- 修改後 (強制指尖朝上) ---
 # vector(0, 1, 0) 代表世界座標的「正上方」
 finger_init_axis = vector(0, 1, 0) 
-
-# 同時建議修改 finger_init_up (指甲面朝向)
-# 如果手指朝上(Y)，那指甲面通常朝向螢幕(Z)或朝向自己
+# 修改 finger_init_up (指甲面朝向)
 finger_init_up = vector(1, 0, 0)
 
 # ==========================================
 #   4. 建立手部物件 (The Hand Construction)
 # ==========================================
 
-# [索引 8] 掌心 (Palm) - 連接 Mux2 Ch7
+# [索引 -1] 掌心 (Palm) - 連接 Mux2 Ch7
 # 1. 掌心 (Palm)
 # 它是老大，parent=None
 palm = HandSegment(
@@ -204,8 +197,8 @@ palm = HandSegment(
     initial_axis=palm_init_axis, 
     initial_up=palm_init_up, 
     is_palm=True,
-    allow_roll=False,
-    allow_pitch=False,
+    # allow_roll=False,
+    # allow_pitch=False,
     allow_yaw=False    # 禁止揮手 (Z軸鎖定)
 )
 
@@ -223,7 +216,7 @@ index1_base = HandSegment(
     # 確保這裡是寫 finger_init_axis，而不是 palm_init_axis
     initial_axis=finger_init_axis,
     # 這裡也要確保是用新的 finger_init_up
-    initial_up=finger_init_up,
+    initial_up=vector(1, 0, -1),    #特別修改大拇指的彎曲方向，獨立出來
     # Offset: 食指在掌心右側，所以 X 設為 2 (數值請依畫面調整)
     pos_offset=vector(-4, 0, 0),
     allow_pitch=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
@@ -237,7 +230,7 @@ index1_top = HandSegment(
     gap=0.3, 
     imu_index=0, 
     is_thumb=True,
-    initial_axis=finger_init_axis, initial_up=finger_init_up,
+    initial_axis=finger_init_axis, initial_up=vector(1, 0, -1), #特別修改大拇指的彎曲方向，獨立出來
     pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
     allow_yaw=False,    # 鎖
     allow_pitch=False  # 鎖 (指中關節是樞紐關節，不能左右張開)
@@ -336,7 +329,7 @@ index3_top = HandSegment(
 )
 
 # -----------------------------------------------------------
-# [中指] (Index / Index3)
+# [無名指] (Index / Index4)
 # -----------------------------------------------------------
 # [索引 10] 無名指指根 - 連接 Mux2 Ch2
 index4_base = HandSegment(
@@ -374,7 +367,7 @@ index4_top = HandSegment(
     parent=index4_mid,   # 接在 index3_mid 後面
     length=2, radius=0.5, 
     gap=0.3, 
-    imu_index=8,
+    imu_index=19,
     initial_axis=finger_init_axis, initial_up=finger_init_up,
     pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
     allow_yaw=False,    # 鎖

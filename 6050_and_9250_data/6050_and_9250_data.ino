@@ -10,8 +10,8 @@
 const bool DEBUG_MODE = false; 
 
 // [系統參數]
-// 設定目前連接的 IMU 總數量 (目前 3顆指節 + 1顆手掌 = 4)
-const int TOTAL_IMUS = 4;
+// 設定目前連接的 IMU 總數量
+const int TOTAL_IMUS = 12;
 
 // 多功器位址定義
 #define MUX_ADDR_A 0x70 // 第一顆多功器 (A0, A1, A2 懸空)
@@ -28,17 +28,22 @@ class GenericIMU {
     uint8_t dataBytes;  // 這個 IMU 會吐出幾個 bytes (6050是12, 9250是18)
     int16_t* rawData;   // 用來儲存讀到的數據 (指標陣列)
 
+    // [新增] 用來記錄是否連線成功
+    bool isConnected = false;
+
     // 建構子 (Constructor): 建立物件時會執行這裡
     GenericIMU(uint8_t muxAddr, uint8_t channel, uint8_t bytes) {
       muxAddress = muxAddr;
       muxChannel = channel;
       dataBytes = bytes;
       // 根據數據量動態分配記憶體空間 (bytes / 2 因為 int16 佔 2 bytes)
-      rawData = new int16_t[bytes / 2]; 
+      rawData = new int16_t[bytes / 2];
+      // [建議] 順便把資料清零，避免沒接線時顯示亂碼
+      memset(rawData, 0, bytes); 
     }
 
     // 虛擬函式 (Virtual Functions): 子類別必須「覆寫 (override)」這些功能
-    virtual void init() = 0;   // 初始化設定
+    virtual bool init() = 0;   // 初始化設定
     virtual void update() = 0; // 讀取數據
 
     // [共用功能] 切換多功器通道
@@ -60,18 +65,33 @@ class MPU6050_Node : public GenericIMU {
     // 建構子: 呼叫爸爸 (GenericIMU) 的建構子，固定數據長度為 12 bytes
     MPU6050_Node(uint8_t muxAddr, uint8_t channel) : GenericIMU(muxAddr, channel, 12) {} 
 
-    // 初始化: 喚醒 MPU6050
-    void init() override {
-      selectMux();      // 切換軌道
+    // [修改] 回傳 bool
+    bool init() override {
+      selectMux();
       
+      // [新增] 步驟 0: 檢查裝置是否存在
       Wire.beginTransmission(0x68);
-      Wire.write(0x6B); // 暫存器: PWR_MGMT_1 (電源管理)
-      Wire.write(0);    // 寫入 0 = 解除睡眠模式 (喚醒)
+      // endTransmission 回傳 0 代表成功收到 ACK (有裝置回應)
+      if (Wire.endTransmission() != 0) {
+        isConnected = false;
+        return false; // 初始化失敗，直接離開
+      }
+
+      // 裝置存在，繼續進行設定
+      Wire.beginTransmission(0x68);
+      Wire.write(0x6B);
+      Wire.write(0);
       Wire.endTransmission();
+      
+      isConnected = true; // 標記為成功
+      return true;
     }
 
     // 更新: 讀取 Acc 和 Gyro
     void update() override {
+      // [新增] 如果沒連線，就不要浪費時間讀取 (避免 I2C 卡住)
+      if (!isConnected) return;
+
       selectMux();      // 切換軌道
 
       // 1. 設定讀取指標
@@ -107,9 +127,16 @@ class MPU9250_Node : public GenericIMU {
     MPU9250_Node(uint8_t muxAddr, uint8_t channel) : GenericIMU(muxAddr, channel, 18) {} 
 
     // 初始化: 步驟比較繁瑣，要設定 "Bypass Mode"
-    void init() override {
+    bool init() override {
       selectMux();
       
+      // [新增] 步驟 0: 檢查 MPU9250 本體是否存在
+      Wire.beginTransmission(0x68);
+      if (Wire.endTransmission() != 0) {
+        isConnected = false;
+        return false; // 找不到 9250，失敗
+      }
+
       // 1. 喚醒 MPU9250 本體
       Wire.beginTransmission(0x68);
       Wire.write(0x6B);
@@ -125,6 +152,15 @@ class MPU9250_Node : public GenericIMU {
       Wire.endTransmission();
       delay(10);
 
+      // [新增] 步驟 2.5: 檢查磁力計 (AK8963) 是否存在
+      Wire.beginTransmission(MAG_ADDR);
+      if (Wire.endTransmission() != 0) {
+        // 雖然 9250 在，但磁力計沒回應 (可能是 Bypass 失敗或壞掉)
+        // 這裡可以選擇是否算失敗，通常算失敗比較保險
+        isConnected = false;
+        return false; 
+      }
+
       // 3. 設定 AK8963 磁力計
       // 步驟 A: 重置磁力計 (Power Down)
       writeMagRegister(0x0B, 0x01); 
@@ -134,10 +170,14 @@ class MPU9250_Node : public GenericIMU {
       // CNTL1 register (0x0A): "0001" (16-bit) + "0110" (Mode 2) = 0x16
       writeMagRegister(0x0A, 0x16); 
       delay(10);
+
+      isConnected = true;
+      return true;
     }
 
     // 更新: 讀取 Acc, Gyro 和 Mag
     void update() override {
+      if (!isConnected) return; // [新增] 確保只有連線成功才讀取
       selectMux();
 
       // --- Part A: 讀取 6軸 (跟 MPU6050 一樣) ---
@@ -208,36 +248,30 @@ void setup() {
   
   // --- [目前硬體配置] ---
   // 多功器 A (0x70)
-  imus[0] = new MPU6050_Node(MUX_ADDR_A, 0); // 指節 1 (接 SD0)
-  imus[1] = new MPU6050_Node(MUX_ADDR_A, 1); // 指節 2 (接 SD1)
-  imus[2] = new MPU6050_Node(MUX_ADDR_A, 2); // 指節 3 (接 SD2)
-  
+  imus[0] = new MPU6050_Node(MUX_ADDR_A, 0); // 拇指指尖 (接 Mux0 Ch0)
+  imus[1] = new MPU6050_Node(MUX_ADDR_A, 1); // 拇指指根 (接 Mux0 Ch1)
+
+  imus[2] = new MPU6050_Node(MUX_ADDR_A, 2); // 食指指尖 (接 Mux0 Ch2)
+  imus[3] = new MPU6050_Node(MUX_ADDR_A, 3); // 食指指中 (接 Mux0 Ch3)
+  imus[4] = new MPU6050_Node(MUX_ADDR_A, 4); // 食指指根 (接 Mux0 Ch4)
+
+  imus[5] = new MPU6050_Node(MUX_ADDR_A, 5); // 中指指尖 (接 Mux0 Ch5)
+  imus[6] = new MPU6050_Node(MUX_ADDR_A, 6); // 中指指中 (接 Mux0 Ch6)
+  imus[7] = new MPU6050_Node(MUX_ADDR_A, 7); // 中指指根 (接 Mux0 Ch7)
+
+  imus[8] = new MPU6050_Node(MUX_ADDR_B, 0); // 無名指指尖 (接 Mux1 Ch0)
+  imus[9] = new MPU6050_Node(MUX_ADDR_B, 1); // 無名指指中 (接 Mux1 Ch1)
+  imus[10] = new MPU6050_Node(MUX_ADDR_B, 2); // 無名指指根 (接 Mux1 Ch2)
+
   // 手掌 (MPU9250) 接在 SD7 (特意留到最後)
-  imus[3] = new MPU9250_Node(MUX_ADDR_A, 7); 
-
-
-  /* --- [未來擴充預留位置] (等你買了第二顆多功器再來解除註解) ---
-  // 設定 TOTAL_IMUS 改成 15
-  
-  // 多功器 A (0x70) 接滿 8 顆 6050
-  imus[0] = new MPU6050_Node(MUX_ADDR_A, 0);
-  ...
-  imus[7] = new MPU6050_Node(MUX_ADDR_A, 7);
-
-  // 多功器 B (0x71) 接剩下的 6050
-  imus[8] = new MPU6050_Node(MUX_ADDR_B, 0);
-  ...
-  imus[13] = new MPU6050_Node(MUX_ADDR_B, 5);
-
-  // 手掌 9250 移到多功器 B 的 SD7
-  imus[14] = new MPU9250_Node(MUX_ADDR_B, 7);
-  */
+  imus[11] = new MPU9250_Node(MUX_ADDR_B, 7); // 掌心 (接 SD7)
 
   // 3. 逐一初始化所有感測器
   if (DEBUG_MODE) Serial.println(">>> System Initializing...");
   
   for (int i = 0; i < TOTAL_IMUS; i++) {
-    imus[i]->init();
+    bool success = imus[i]->init();
+
     if (DEBUG_MODE) {
       Serial.print("IMU "); Serial.print(i); 
       Serial.print(" (Ch"); Serial.print(imus[i]->muxChannel);
