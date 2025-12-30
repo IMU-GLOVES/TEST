@@ -151,7 +151,7 @@ class HandSegment:
 # ==========================================
 
 # 1. 硬體設定
-my_setup = [6] * 8 + [9] 
+my_setup = [6] * 11 + [9] 
 manager = SerialManager(imu_setup=my_setup)
 processor = DataProcessor()
 
@@ -367,7 +367,7 @@ index4_top = HandSegment(
     parent=index4_mid,   # 接在 index3_mid 後面
     length=2, radius=0.5, 
     gap=0.3, 
-    imu_index=19,
+    imu_index=8,
     initial_axis=finger_init_axis, initial_up=finger_init_up,
     pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
     allow_yaw=False,    # 鎖
