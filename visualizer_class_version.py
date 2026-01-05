@@ -3,6 +3,7 @@ from imu9_serial_manager import SerialManager
 from imu9_data_to_math import DataProcessor
 import sys
 
+
 # ==========================================
 #   Class: 手部組件 (包含 圓頂關節 + 指骨圓柱)
 # ==========================================
@@ -149,10 +150,24 @@ class HandSegment:
 # ==========================================
 #   主程式區塊
 # ==========================================
-
+"""
 # 1. 硬體設定
-my_setup = [6] * 11 + [9] 
+my_setup = [6] * 11
 manager = SerialManager(imu_setup=my_setup)
+"""
+# -------------------------------------Teddy Add 2 Com port!!------------------------------------------- #
+from dual_serial_manager import DualSerialManager
+
+# MCU-A (假設接 8 顆 6050: 拇指、食指、中指)
+setup_a = [6] * 8 
+# MCU-B (假設接 無名指3顆 + 掌心1顆9軸 + 小指3顆 = 7顆)
+setup_b = [6, 6, 6, 6, 6, 6, 9] 
+
+# 請根據你的裝置管理員手動指定 COM Port
+manager = DualSerialManager(port_a='COM3', setup_a=setup_a, port_b='COM6', setup_b=setup_b)
+# ------------------------------------- Add 2 Com port Done ------------------------------------------- #
+
+
 processor = DataProcessor()
 
 if not manager.connect():
@@ -190,16 +205,17 @@ finger_init_up = vector(1, 0, 0)
 # [索引 -1] 掌心 (Palm) - 連接 Mux2 Ch7
 # 1. 掌心 (Palm)
 # 它是老大，parent=None
+
 palm = HandSegment(
     name="Palm", 
     parent=None, 
-    length=0.5, radius=4, gap=0, imu_index=18, # 假設最後一顆是掌心
+    length=0.5, radius=4, gap=0, imu_index=14, # 假設最後一顆是掌心
     initial_axis=palm_init_axis, 
     initial_up=palm_init_up, 
     is_palm=True,
     # allow_roll=False,
     # allow_pitch=False,
-    allow_yaw=False    # 禁止揮手 (Z軸鎖定)
+    allow_yaw=True    # 禁止揮手 (Z軸鎖定)
 )
 
 # -----------------------------------------------------------
@@ -332,6 +348,7 @@ index3_top = HandSegment(
 # [無名指] (Index / Index4)
 # -----------------------------------------------------------
 # [索引 10] 無名指指根 - 連接 Mux2 Ch2
+
 index4_base = HandSegment(
     name="Index4_Base", 
     parent=palm,          # 變數名稱
@@ -373,13 +390,63 @@ index4_top = HandSegment(
     allow_yaw=False,    # 鎖
     allow_pitch=False  # 鎖
 )
+# -------------------------------------Teddy Add start------------------------------------------- #
+# -----------------------------------------------------------
+# [小拇指] (Index / Index5)
+# -----------------------------------------------------------
+# [索引 13] 小拇指指根 - 連接 Mux2 Ch5
+
+index5_base = HandSegment(
+    name="Index5_Base", 
+    parent=palm,          # 變數名稱
+    length=1.6, radius=0.5, 
+    gap=0.5, 
+    imu_index=13,
+    # 確保這裡是寫 finger_init_axis，而不是 palm_init_axis
+    initial_axis=finger_init_axis, 
+    
+    # 這裡也要確保是用新的 finger_init_up
+    initial_up=finger_init_up,
+    # Offset: 食指在掌心右側，所以 X 設為 2 (數值請依畫面調整)
+    pos_offset=vector(3, 2, 0),
+    allow_pitch=False    # 禁止自轉 (手指不會像螺絲起子一樣轉)
+)
+
+# [索引 12] 小拇指指中 - 連接 Mux2 Ch4
+index5_mid = HandSegment(
+    name="Index5_Mid", 
+    parent=index5_base,   # 接在 index3_base 後面
+    length=1.6, radius=0.5, 
+    gap=0.3, 
+    imu_index=12,
+    initial_axis=finger_init_axis, initial_up=finger_init_up,
+    pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
+    allow_yaw=False,    # 鎖
+    allow_pitch=False  # 鎖 (指中關節是樞紐關節，不能左右張開)
+)
+
+# [索引 11] 小拇指指尖 - 連接 Mux2 Ch3
+index5_top = HandSegment(
+    name="Index5_Top", 
+    parent=index5_mid,   # 接在 index3_mid 後面
+    length=1.6, radius=0.5, 
+    gap=0.3, 
+    imu_index=11,
+    initial_axis=finger_init_axis, initial_up=finger_init_up,
+    pos_offset=vector(0, 0, 0), # 接龍，不需要偏移
+    allow_yaw=False,    # 鎖
+    allow_pitch=False  # 鎖
+)
+# -------------------------------------Teddy Add end------------------------------------------- #
 
 # 放入清單，順序其實不影響邏輯，因為 update 裡面是看 parent 計算
 # 但為了保險起見，我們還是按層級順序放
 hand_parts = [palm, index1_base, index1_top,
                index2_base, index2_mid, index2_top,
                 index3_base, index3_mid, index3_top,
-                index4_base, index4_mid, index4_top]
+                index4_base, index4_mid, index4_top,
+                index5_base, index5_mid, index5_top #teddy add
+                ]
 
 # ==========================================
 #   5. 主迴圈
@@ -411,11 +478,26 @@ while True:
         # 計算角度
         angles = processor.process(raw_data)
         
+        """ --- Teddy Mark -------------------------------------
         # 顯示掌心數據除錯
         p, r, y = angles[3] # 掌心
         sys.stdout.write(f"\rPalm: P{p:5.1f}|R{r:5.1f}|Y{y:5.1f}  Tip: P{angles[2][0]:5.1f}")
         sys.stdout.flush()
-
+         --- Teddy Mark ---------------------------------------- """
+        
+        # --- Teddy Add start---------------------------------------------------
+        # 增加長度判斷，避免 IndexError ---
+        if len(angles) >= 4:
+            #p, r, y = angles[3] # 原本假設第四顆是掌心
+            #sys.stdout.write(f"\rPalm: P{p:5.1f}|R{r:5.1f}|Y{y:5.1f}  Tip: P{angles[2][0]:5.1f}")
+            sys.stdout.write(f"\rTesting mode: Received {len(angles)} IMUs data...")
+        else:
+            # 測試階段：只顯示目前有的感測器數據
+            sys.stdout.write(f"\rTesting mode: Received {len(angles)} IMUs data...")
+        sys.stdout.flush()
+        
+        # --- Teddy Add end----------------------------------------------------
+        
         # --- 更新所有部位 ---
         # 這裡會自動處理連動：Palm 先動 -> Base 抓 Palm 位置 -> Mid 抓 Base 位置...
         for part in hand_parts:

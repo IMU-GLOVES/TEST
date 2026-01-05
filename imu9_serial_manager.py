@@ -4,7 +4,7 @@ import time
 import serial.tools.list_ports
 
 class SerialManager:
-    def __init__(self, port='COM4', baudrate=115200, imu_setup=None):
+    def __init__(self, port=None, baudrate=115200, imu_setup=None):
         """
         初始化通訊管理器
         :param port: 指定 COM Port (例如 'COM3')，若為 None 則自動搜尋
@@ -20,7 +20,7 @@ class SerialManager:
         # --- 1. 設定 IMU 配置 (若未指定，給一個預設值避免報錯) ---
         if imu_setup is None:
             print("⚠️ 警告: 未指定 imu_setup，使用預設值 [6, 6, 6, 9]")
-            self.imu_setup = [6, 6, 6, 9]
+            self.imu_setup = [6, 6, 6]
         else:
             self.imu_setup = imu_setup
 
@@ -156,8 +156,9 @@ if __name__ == "__main__":
     # 【情境 1：現狀 (Current)】
     # 3 顆 6軸 (手指) + 1 顆 9軸 (手掌)
     # Python 寫法：[6] * 3 會產生 [6, 6, 6]
-    current_config = [6] * 3 + [9] 
-
+    #current_config = [6] * 3 + [9] 
+    current_config = [6] * 14 + [9] 
+     
     # 【情境 2：未來 (Future)】
     # 假設你有 14 顆指節 (6軸) + 1 顆手掌 (9軸)
     # 你只需要把下面的 14 改掉就好，超級方便！

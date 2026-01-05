@@ -171,7 +171,7 @@ if __name__ == "__main__":
     # 1. 硬體配置設定
     # 目前: 3顆指節(6軸) + 1顆手掌(9軸)
     # 未來: 改成 [6]*14 + [9] 即可，下面的顯示程式碼完全不用動！
-    my_setup = [6] * 3 + [9] 
+    my_setup = [6] * 14 + [9]
     
     manager = SerialManager(imu_setup=my_setup)
     processor = DataProcessor()

@@ -11,7 +11,7 @@ const bool DEBUG_MODE = false;
 
 // [系統參數]
 // 設定目前連接的 IMU 總數量
-const int TOTAL_IMUS = 12;
+const int TOTAL_IMUS = 8;
 
 // 多功器位址定義
 #define MUX_ADDR_A 0x70 // 第一顆多功器 (A0, A1, A2 懸空)
@@ -259,12 +259,12 @@ void setup() {
   imus[6] = new MPU6050_Node(MUX_ADDR_A, 6); // 中指指中 (接 Mux0 Ch6)
   imus[7] = new MPU6050_Node(MUX_ADDR_A, 7); // 中指指根 (接 Mux0 Ch7)
 
-  imus[8] = new MPU6050_Node(MUX_ADDR_B, 0); // 無名指指尖 (接 Mux1 Ch0)
-  imus[9] = new MPU6050_Node(MUX_ADDR_B, 1); // 無名指指中 (接 Mux1 Ch1)
-  imus[10] = new MPU6050_Node(MUX_ADDR_B, 2); // 無名指指根 (接 Mux1 Ch2)
+  //imus[8] = new MPU6050_Node(MUX_ADDR_B, 0); // 無名指指尖 (接 Mux1 Ch0)
+  //imus[9] = new MPU6050_Node(MUX_ADDR_B, 1); // 無名指指中 (接 Mux1 Ch1)
+  //imus[10] = new MPU6050_Node(MUX_ADDR_B, 2); // 無名指指根 (接 Mux1 Ch2)
 
   // 手掌 (MPU9250) 接在 SD7 (特意留到最後)
-  imus[11] = new MPU9250_Node(MUX_ADDR_B, 7); // 掌心 (接 SD7)
+  //imus[11] = new MPU9250_Node(MUX_ADDR_B, 7); // 掌心 (接 SD7)
 
   // 3. 逐一初始化所有感測器
   if (DEBUG_MODE) Serial.println(">>> System Initializing...");
